@@ -78,7 +78,7 @@ type GeneralConfig struct {
 
 type TelegramConfig struct {
 	BotAPIToken string `mapstructure:"bot_api_token" json:"bot_api_token" yaml:"bot_api_token"`
-	UserID      string `mapstructure:"user_id" json:"user_id" yaml:"user_id"`
+	ChatID      string `mapstructure:"chat_id" json:"chat_id" yaml:"chat_id"`
 }
 
 type Config struct {
@@ -798,7 +798,7 @@ func (c *Config) GetTelegramBotToken() string {
 }
 
 func (c *Config) GetTelegramUserID() string {
-	return c.telegramConfig.UserID
+	return c.telegramConfig.ChatID
 }
 
 func (c *Config) GetBaseDomain() string {
@@ -826,13 +826,13 @@ func (c *Config) SetTelegramBotToken(token string) {
 }
 
 func (c *Config) SetTelegramUserID(userID string) {
-	c.telegramConfig.UserID = userID
-	c.cfg.Set("telegram.user_id", userID)
+	c.telegramConfig.ChatID = userID
+	c.cfg.Set("telegram.chat_id", userID)
 	c.cfg.WriteConfig()
 	if userID != "" {
-		log.Info("Telegram user ID set")
+		log.Info("Telegram chat ID set (can be user ID, group chat ID or channel ID)")
 	} else {
-		log.Warning("Telegram user ID cleared. Set it to enable Telegram notifications.")
+		log.Warning("Telegram chat ID cleared. Set it to enable Telegram notifications.")
 	}
 }
 
